@@ -2,18 +2,15 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
 const KITS = {
-  watch: { name: "Watch Kit", price: 349, included: 1, desc: "Continuous supervision: one eye per room cluster and a Tag to anchor identity." },
-  guide: { name: "Guide Kit", price: 649, included: 2, desc: "Supervision plus recall cues, so a nudge is always one step ahead of a problem." },
-  pack: { name: "Pack Kit", price: 1149, included: 4, desc: "The full loop: cues, haptics and a boundary that closes before the road." }
+  starter: { name: "Starter Kit", price: 599, seekers: 1, desc: "One Seeker Hub, one Tag, one Action Taker — essential coverage for apartments." },
+  home: { name: "Home Kit", price: 899, seekers: 3, desc: "Hub + 2 Nodes for full indoor mesh, Tag, Action Taker — seamless room-to-room handoff." },
+  estate: { name: "Estate Kit", price: 1349, seekers: 6, desc: "Hub + 3 Nodes + 2 Fields for indoor + garden + driveway, Tag, Action Taker — complete perimeter." }
 };
 
 const ADDONS = {
   "seeker-node": { name: "Seeker Node", price: 119 },
   "seeker-field": { name: "Seeker Field", price: 189 },
-  "taker-beacon": { name: "Taker Beacon", price: 149 },
-  "taker-collar": { name: "Taker Collar", price: 179 },
-  "taker-gate": { name: "Taker Gate", price: 249 },
-  "taker-dispenser": { name: "Taker Dispenser", price: 199 }
+  "seeker-tag": { name: "Seeker Tag", price: 79 }
 };
 
 const money = (n) => "$" + Number(n).toLocaleString("en-US");
@@ -74,12 +71,13 @@ let dpr = 1;
 let trail = [];
 
 const NODES = [
-  { id: "hub", x: 0.26, y: 0.3, type: "seeker", label: "S-01" },
-  { id: "node", x: 0.66, y: 0.23, type: "seeker", label: "S-02" },
-  { id: "field", x: 0.22, y: 0.74, type: "seeker", label: "S-03" },
-  { id: "beacon", x: 0.79, y: 0.38, type: "taker", label: "T-02" },
-  { id: "collar", x: 0.6, y: 0.79, type: "taker", label: "T-01" },
-  { id: "gate", x: 0.9, y: 0.62, type: "taker", label: "T-03" }
+  { id: "hub", x: 0.20, y: 0.30, type: "seeker", label: "S-01" },
+  { id: "node1", x: 0.40, y: 0.20, type: "seeker", label: "S-02" },
+  { id: "node2", x: 0.60, y: 0.25, type: "seeker", label: "S-03" },
+  { id: "field1", x: 0.15, y: 0.55, type: "seeker", label: "S-04" },
+  { id: "field2", x: 0.85, y: 0.45, type: "seeker", label: "S-05" },
+  { id: "tag", x: 0.50, y: 0.55, type: "tag", label: "NALA" },
+  { id: "action-taker", x: 0.50, y: 0.80, type: "taker", label: "AT" }
 ];
 
 const dogPos = (t) => ({
@@ -174,7 +172,8 @@ function drawSightline(dog) {
 }
 
 function drawRadar(t) {
-  const hub = NODES[0];
+  const hub = NODES.find(n => n.id === "hub");
+  if (!hub) return;
   const hx = hub.x * cw;
   const hy = hub.y * ch;
   const angle = (t * 0.55) % (Math.PI * 2);
@@ -202,7 +201,9 @@ function drawNodes(t) {
   NODES.forEach((n) => {
     const x = n.x * cw;
     const y = n.y * ch;
-    const color = n.type === "seeker" ? "111,242,165" : "255,184,107";
+    let color = "111,242,165";
+    if (n.type === "taker") color = "255,184,107";
+    if (n.type === "tag") color = "255,255,255";
     const pulse = 1 + Math.sin(t * 2 + n.x * 10) * 0.12;
     ctx.beginPath();
     ctx.arc(x, y, 9 * pulse, 0, Math.PI * 2);
@@ -302,53 +303,53 @@ window.addEventListener("resize", () => {
 
 const NODE_DATA = {
   hub: {
-    kicker: "Seeker Hub · the primary eye",
-    title: "Seeker Hub",
-    body: "The anchor of the mesh. A 4K eye with a 60 GHz radar that keeps tracking when the lights are out, plus a Thread border router so every other unit joins in minutes.",
-    specs: [["Field of view", "170° · 4K/30"], ["Radar", "60 GHz mmWave"], ["Role", "Border router · arbiter"], ["Power", "USB-C · 12 W"]],
+    kicker: "Seeker Hub · living room",
+    title: "S-01 HUB",
+    body: "Primary border router. 4K/30 · 170° · 60 GHz mmWave · 4-mic array. Thread border router for the mesh. Currently tracking Nala at position (3.2, 1.8) — resting on bed.",
+    specs: [["Field of view", "170° · 4K/30"], ["Radar", "60 GHz mmWave"], ["Role", "Border router · arbiter"], ["Power", "12 V DC"]],
     foot: "Group behaviour → leads handoffs and arbitrates identity"
   },
-  node: {
-    kicker: "Seeker Node · the room filler",
-    title: "Seeker Node",
-    body: "A small plug-in unit that covers the rooms a Hub can't see into. It watches doorways and stairs, and passes the dog to the next Seeker without a gap.",
-    specs: [["Field of view", "120° · 2K"], ["Sensors", "PIR + mmWave"], ["Role", "Room coverage"], ["Power", "Plug-in · 6 W"]],
-    foot: "Group behaviour → overlaps its neighbour for continuous sight"
+  node1: {
+    kicker: "Seeker Node · hallway",
+    title: "S-02 NODE",
+    body: "Plug-in unit covering the hallway and stairs. 2K · 120° · PIR + mmWave. Passes the dog to the next Seeker without a gap. 6 W power draw.",
+    specs: [["Field of view", "120° · 2K"], ["Sensors", "PIR + mmWave"], ["Role", "Hallway & stairs"], ["Power", "Plug-in · 6 W"]],
+    foot: "Group behaviour → overlaps Hub and bedroom Node"
   },
-  field: {
-    kicker: "Seeker Field · the garden eye",
-    title: "Seeker Field",
-    body: "Weatherproof and infrared, built for the garden, the side return and the gate. It watches the boundary and gives the mesh its first warning before the road.",
-    specs: [["Rating", "IP66 · 2K"], ["Night vision", "IR 15 m"], ["Role", "Boundary watch"], ["Power", "Solar option"]],
-    foot: "Group behaviour → raises the first boundary alert"
+  node2: {
+    kicker: "Seeker Node · bedroom",
+    title: "S-03 NODE",
+    body: "Covers the bedroom and adjacent bathroom. Watches doorways and quiet zones. Hands off to Hub when dog returns to living area.",
+    specs: [["Field of view", "120° · 2K"], ["Sensors", "PIR + mmWave"], ["Role", "Bedroom coverage"], ["Power", "Plug-in · 6 W"]],
+    foot: "Group behaviour → overlaps hallway Node"
+  },
+  field1: {
+    kicker: "Seeker Field · garden",
+    title: "S-04 FIELD",
+    body: "Weatherproof garden unit. 2K · IP66 · IR 15 m · solar option · 60 GHz radar. Watches the back gate and lawn. First boundary alert.",
+    specs: [["Rating", "IP66 · 2K"], ["Night vision", "IR 15 m"], ["Role", "Garden boundary"], ["Power", "Solar option"]],
+    foot: "Group behaviour → raises the first outdoor alert"
+  },
+  field2: {
+    kicker: "Seeker Field · driveway",
+    title: "S-05 FIELD",
+    body: "Covers the front approach and driveway. Detects movement toward the street. Triggers Action Taker boundary beep if dog approaches.",
+    specs: [["Rating", "IP66 · 2K"], ["Night vision", "IR 15 m"], ["Role", "Driveway boundary"], ["Power", "Wired"]],
+    foot: "Group behaviour → final boundary before road"
   },
   tag: {
-    kicker: "Seeker Tag · the anchor",
-    title: "Nala",
-    body: "A 22 g collar tag that gives every Seeker a shared reference for identity and position. UWB for centimetre accuracy indoors, GPS for the garden, and a pulse sensor for pace.",
-    specs: [["Range", "UWB 60 m · GPS outdoor"], ["Battery", "7 days"], ["Weight", "22 g"]],
+    kicker: "Seeker Tag · on Nala",
+    title: "NALA",
+    body: "22 g collar tag with UWB + BLE + GPS. Gives every Seeker a shared reference for identity and position. Pulse sensor for pace. 7-day battery.",
+    specs: [["Range", "UWB 60 m · GPS outdoor"], ["Battery", "7 days"], ["Weight", "22 g"], ["Sensors", "UWB + BLE + GPS + pulse"]],
     foot: "Group behaviour → identity anchor for all Seekers"
   },
-  beacon: {
-    kicker: "Taker Beacon · the voice",
-    title: "Taker Beacon",
-    body: "The recall voice. An 85 dB speaker with a colour ring that calls the dog home with a tone it already knows, then confirms back to the mesh that it played.",
-    specs: [["Output", "85 dB speaker"], ["Signal", "RGB attention ring"], ["Role", "Recall cue"], ["Mount", "Wall or plug"]],
-    foot: "Group behaviour → calls while the Gate blocks"
-  },
-  collar: {
-    kicker: "Taker Collar · the nudge",
-    title: "Taker Collar",
-    body: "Three levels of vibration and a tone, nothing more. A breakaway clasp and a physical release keep the dog in charge of its own body at all times.",
-    specs: [["Cues", "3 haptic levels · tone"], ["Rating", "IP67 · breakaway"], ["Battery", "5 days"], ["Shock", "None"]],
-    foot: "Group behaviour → adds a gentle physical cue to recall"
-  },
-  gate: {
-    kicker: "Taker Gate · the boundary",
-    title: "Taker Gate",
-    body: "The last line before the road. It closes on approach detection, holds while the Beacon calls, and opens by hand whenever you decide the moment is over.",
-    specs: [["Motor", "12 V · battery backup"], ["Trigger", "UWB approach"], ["Release", "Manual + app"], ["Role", "Hold"]],
-    foot: "Group behaviour → closes only when cues haven't worked"
+  "action-taker": {
+    kicker: "Action Taker · engaged",
+    title: "ACTION TAKER",
+    body: "Single engagement hub: puzzle module (3 sliding panels + rotating wheel), ball roller, 4-slot scent cartridge, 3 W speaker, LED ring, 500-treat hopper. Thread + BLE. 2.8 kg weighted base.",
+    specs: [["Puzzle", "3 panels + 8-position wheel"], ["Ball", "Roller 0.2–1.5 m/s"], ["Scent", "4-slot cartridge"], ["Sound", "3 W full-range"], ["Treats", "500 capacity · 1–5 g"]],
+    foot: "Group behaviour → engages on mesh movement signal"
   }
 };
 
@@ -362,9 +363,11 @@ const logText = $("#logText");
 const logTime = $("#logTime");
 
 const LEVEL_LOGS = {
-  watch: "Watch level · Takers quiet · Seeker Field holds sight · coverage 96%",
-  guide: "Guide level · Beacon recall sent · Collar haptic 1 · acknowledged in 240 ms",
-  hold: "Hold level · Gate closing · Beacon recall repeating · owner alerted"
+  watch: "Watch level · Action Taker idle · Seeker mesh holds sight · coverage 96% · dog resting",
+  puzzle: "Puzzle level · LED ring amber · scent puff released · panels armed · waiting for approach",
+  play: "Play level · ball roller armed · IR zone active · unpredictable pattern queued",
+  scent: "Scent level · cartridge 1 (bacon) primed · micro-pump ready · trail path set",
+  sound: "Sound level · curiosity tone armed → fallback chirp → boundary beep sequence"
 };
 
 function selectNode(id) {
@@ -418,26 +421,30 @@ let currentPlan = null;
 function computePlan() {
   const rooms = Number(roomsEl.value);
   const outdoor = $('input[name="outdoor"]:checked', plannerForm).value;
-  const level = $('input[name="level"]:checked', plannerForm).value;
   const dog = $('input[name="dog"]:checked', plannerForm).value;
+  const engage = $('input[name="engage"]:checked', plannerForm).value;
 
   const indoorSeekers = Math.max(1, Math.ceil(rooms / 2));
   const outdoorUnits = outdoor === "garden" ? 1 : outdoor === "field" ? 2 : 0;
-  const seekers = indoorSeekers + outdoorUnits;
-  const kitId = level === "hold" ? "pack" : level === "guide" ? "guide" : "watch";
+  const totalSeekers = indoorSeekers + outdoorUnits;
+
+  let kitId = "starter";
+  if (totalSeekers >= 5) kitId = "estate";
+  else if (totalSeekers >= 3) kitId = "home";
+
   const kit = KITS[kitId];
-  const extra = Math.max(0, seekers - kit.included);
+  const extra = Math.max(0, totalSeekers - kit.seekers);
 
   const extras = [];
   const extraField = Math.min(extra, outdoorUnits);
   if (extraField > 0) extras.push({ id: "seeker-field", qty: extraField });
   if (extra - extraField > 0) extras.push({ id: "seeker-node", qty: extra - extraField });
-  if (level === "hold" && outdoor !== "none") extras.push({ id: "taker-gate", qty: 1 });
+  if (dog === "large") extras.push({ id: "seeker-tag", qty: 1 });
 
   const addonTotal = extras.reduce((sum, e) => sum + ADDONS[e.id].price * e.qty, 0);
   const total = kit.price + addonTotal;
 
-  return { rooms, outdoor, level, dog, seekers, kitId, kit, extras, total };
+  return { rooms, outdoor, dog, engage, totalSeekers, kitId, kit, extras, total };
 }
 
 function renderPlan() {
@@ -446,15 +453,17 @@ function renderPlan() {
   roomsOut.textContent = plan.rooms;
   const fill = ((plan.rooms - 1) / 7) * 100;
   roomsEl.style.background = `linear-gradient(90deg, var(--green) ${fill}%, rgba(111,242,165,0.16) ${fill}%)`;
-  resultKit.textContent = plan.kit.name;
+  resultKit.textContent = `${plan.kit.name} + Action Taker`;
   resultDesc.textContent = plan.kit.desc;
 
   const outdoorLabel = plan.outdoor === "garden" ? "garden" : plan.outdoor === "field" ? "large field" : "no outdoor space";
   const dogLabel = plan.dog.charAt(0).toUpperCase() + plan.dog.slice(1);
+  const engageLabel = plan.engage.charAt(0).toUpperCase() + plan.engage.slice(1);
   const rows = [
-    `<li><span>${plan.kit.name} · ${plan.kit.included} Seeker${plan.kit.included > 1 ? "s" : ""}</span><span>${money(plan.kit.price)}</span></li>`,
-    `<li><span>Coverage · ${plan.seekers} Seekers for ${plan.rooms} room${plan.rooms > 1 ? "s" : ""}, ${outdoorLabel}</span><span>—</span></li>`,
-    `<li><span>Collar fit · ${dogLabel}</span><span>${plan.kitId === "pack" ? "included" : "add-on"}</span></li>`
+    `<li><span>${plan.kit.name} (${plan.kit.seekers} Seekers) + Action Taker</span><span>${money(plan.kit.price)}</span></li>`,
+    `<li><span>Coverage · ${plan.totalSeekers} Seekers for ${plan.rooms} room${plan.rooms > 1 ? "s" : ""}, ${outdoorLabel}</span><span>—</span></li>`,
+    `<li><span>Dog size · ${dogLabel}</span><span>—</span></li>`,
+    `<li><span>Engagement · ${engageLabel}</span><span>—</span></li>`
   ];
   plan.extras.forEach((e) => {
     rows.push(`<li><span>${ADDONS[e.id].name} × ${e.qty}</span><span>${money(ADDONS[e.id].price * e.qty)}</span></li>`);
@@ -490,7 +499,7 @@ function selectedAddons() {
     .filter((cb) => cb.checked)
     .map((cb) => {
       const qty = Number(cb.closest("label").querySelector(".addon-qty").value) || 1;
-      return { id: cb.value, qty: Math.max(1, Math.min(9, qty)) };
+      return { id: cb.value, qty: Math.max(1, Math.min(5, qty)) };
     });
 }
 
@@ -501,7 +510,7 @@ const sumTotal = $("#sumTotal");
 
 function renderSummary() {
   const kit = KITS[kitSelect.value];
-  const qty = Math.max(1, Math.min(10, Number(qtyInput.value) || 1));
+  const qty = Math.max(1, Math.min(5, Number(qtyInput.value) || 1));
   const addons = selectedAddons();
   const addonTotal = addons.reduce((sum, a) => sum + ADDONS[a.id].price * a.qty, 0);
   const total = kit.price * qty + addonTotal;
@@ -555,7 +564,7 @@ plannerAdd.addEventListener("click", () => {
   });
   const outdoorLabel = currentPlan.outdoor === "garden" ? "garden" : currentPlan.outdoor === "field" ? "large field" : "no outdoor";
   const dogLabel = currentPlan.dog.charAt(0).toUpperCase() + currentPlan.dog.slice(1);
-  notesInput.value = `Planner: ${currentPlan.rooms} rooms · ${outdoorLabel} · ${currentPlan.level} response · ${currentPlan.seekers} Seekers · ${dogLabel} collar fit`;
+  notesInput.value = `Planner: ${currentPlan.rooms} rooms · ${outdoorLabel} · ${currentPlan.dog} dog · ${currentPlan.totalSeekers} Seekers · ${currentPlan.engage} engagement`;
   syncAddonState();
   renderSummary();
   scrollToOrder();
@@ -636,10 +645,56 @@ $("#anotherOrder").addEventListener("click", () => {
   orderSuccess.hidden = true;
   orderLayout.hidden = false;
   orderForm.reset();
-  kitSelect.value = "guide";
+  kitSelect.value = "home";
   addonInputs().forEach((cb) => { cb.checked = false; });
   syncAddonState();
   renderSummary();
   setStatus("");
   scrollToOrder();
 });
+
+// Demo video interactions
+const video = $("#atVideo");
+const videoOverlay = $("#videoOverlay");
+const playBtn = $("#playBtn");
+const chapterBtns = $$(".chapter-btn");
+
+if (video) {
+  playBtn.addEventListener("click", () => {
+    video.play();
+    videoOverlay.classList.add("hidden");
+  });
+
+  video.addEventListener("play", () => {
+    videoOverlay.classList.add("hidden");
+  });
+
+  video.addEventListener("pause", () => {
+    videoOverlay.classList.remove("hidden");
+  });
+
+  video.addEventListener("ended", () => {
+    videoOverlay.classList.remove("hidden");
+  });
+
+  video.addEventListener("timeupdate", () => {
+    const currentTime = video.currentTime;
+    chapterBtns.forEach((btn) => {
+      const chapterTime = Number(btn.dataset.time);
+      const nextBtn = chapterBtns[chapterBtns.indexOf(btn) + 1];
+      const nextTime = nextBtn ? Number(nextBtn.dataset.time) : Infinity;
+      if (currentTime >= chapterTime && currentTime < nextTime) {
+        btn.classList.add("is-active");
+      } else {
+        btn.classList.remove("is-active");
+      }
+    });
+  });
+
+  chapterBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      video.currentTime = Number(btn.dataset.time);
+      if (video.paused) video.play();
+    });
+  });
+}
