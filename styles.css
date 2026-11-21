@@ -1340,6 +1340,34 @@ input:invalid:not(:placeholder-shown) { border-color: rgba(255, 122, 107, 0.5); 
 .at-hardware { margin-top: 40px; padding-top: 32px; border-top: 1px solid var(--line); }
 .at-hardware h3 { font-size: 18px; margin-bottom: 24px; }
 
+/* Action Taker gallery */
+.at-gallery { margin-top: 32px; }
+.at-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+}
+.at-gallery-grid figure { margin: 0; }
+.at-gallery-grid img {
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  display: block;
+}
+.at-gallery-grid figcaption {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--dim);
+  text-align: center;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .at-gallery-grid { grid-template-columns: 1fr; }
+}
+
 /* Demo video section */
 .demo-video { margin-top: 28px; }
 .video-wrapper {
