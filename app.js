@@ -723,6 +723,15 @@ let soundWaves = [];
 let eventLog = [];
 let timelineItems = [];
 
+// Canvas dimensions (computed on resize)
+let canvasW = 0;
+let canvasH = 0;
+let canvasCX = 0;
+let canvasCY = 0;
+let boundaryY = 0;
+let atX = 0;
+let atY = 0;
+
 const previewElements = {
   status: $("#previewStatus"),
   hudDog: $("#hudDog"),
@@ -836,14 +845,23 @@ function resizePreviewCanvas() {
   previewCanvas.width = Math.round(rect.width * dpr);
   previewCanvas.height = Math.round(rect.height * dpr);
   previewCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // Update global dimensions
+  canvasW = rect.width;
+  canvasH = rect.height;
+  canvasCX = canvasW / 2;
+  canvasCY = canvasH / 2;
+  boundaryY = canvasH * 0.75;
+  atX = canvasCX;
+  atY = canvasH * 0.9;
 }
 
 function drawPreviewFrame() {
   if (!previewCanvas || !previewCtx) return;
-  const w = previewCanvas.width / (window.devicePixelRatio || 1);
-  const h = previewCanvas.height / (window.devicePixelRatio || 1);
-  const cx = w / 2;
-  const cy = h / 2;
+  const w = canvasW;
+  const h = canvasH;
+  const cx = canvasCX;
+  const cy = canvasCY;
 
   previewCtx.clearRect(0, 0, w, h);
 
@@ -891,7 +909,6 @@ function drawPreviewFrame() {
   previewCtx.restore();
 
   // Draw boundary zone (bottom area)
-  const boundaryY = h * 0.75;
   previewCtx.save();
   const boundaryGradient = previewCtx.createLinearGradient(0, boundaryY, 0, h);
   boundaryGradient.addColorStop(0, "rgba(255,184,107,0)");
@@ -914,8 +931,6 @@ function drawPreviewFrame() {
   previewCtx.restore();
 
   // Draw Action Taker position (bottom center)
-  const atX = cx;
-  const atY = h * 0.9;
   previewCtx.save();
   previewCtx.translate(atX, atY);
   // Base
@@ -1153,7 +1168,7 @@ function previewLoop() {
     case "sound":
       // Emit sound waves periodically
       if (Math.random() < 0.02 * previewSpeed) {
-        soundWaves.push({ x: cx, y: h * 0.9, radius: 0, maxRadius: 300, speed: 2 });
+        soundWaves.push({ x: canvasCX, y: canvasH * 0.9, radius: 0, maxRadius: 300, speed: 2 });
       }
       // After 2s, trigger puzzle
       if (!window.soundStartTime) window.soundStartTime = previewTime;
@@ -1195,6 +1210,8 @@ function previewLoop() {
 
     case "ballPlay":
       if (!ballActive) {
+        const dogScreenX = dogX * canvasW;
+        const dogScreenY = dogY * canvasH;
         ballX = dogScreenX || atX;
         ballY = dogScreenY || atY;
         ballActive = true;
@@ -1204,13 +1221,11 @@ function previewLoop() {
       ballX += Math.cos(ballAngle) * 2 * previewSpeed;
       ballY += Math.sin(ballAngle) * 1.5 * previewSpeed;
       // Bounce off walls
-      const w = previewCanvas.width / (window.devicePixelRatio || 1);
-      const h = previewCanvas.height / (window.devicePixelRatio || 1);
-      if (ballX < 20 || ballX > w - 20) ballAngle = Math.PI - ballAngle;
-      if (ballY < 20 || ballY > h - 20) ballAngle = -ballAngle;
+      if (ballX < 20 || ballX > canvasW - 20) ballAngle = Math.PI - ballAngle;
+      if (ballY < 20 || ballY > canvasH - 20) ballAngle = -ballAngle;
       // Dog chases ball
-      dogTargetX = ballX / w;
-      dogTargetY = ballY / h;
+      dogTargetX = ballX / canvasW;
+      dogTargetY = ballY / canvasH;
       break;
   }
 
