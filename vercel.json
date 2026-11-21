@@ -1,0 +1,7 @@
+{
+  "buildCommand": "echo 'Static site - no build needed'",
+  "outputDirectory": ".",
+  "devCommand": "npx serve . -p 3000",
+  "installCommand": "npm install",
+  "framework": null
+}
