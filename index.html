@@ -485,6 +485,80 @@
     </div>
   </section>
 
+  <section class="section preview" id="preview">
+    <div class="section-head reveal">
+      <p class="eyebrow">Live Preview</p>
+      <h2>See Shepherd in action — interactive simulation.</h2>
+      <p class="section-lede">Click <strong>Start Simulation</strong> to watch the Seeker camera detect Nala, track her gestures, and trigger the Action Taker's response chain: sound attraction → puzzle → reward → auto-solve → ball play.</p>
+    </div>
+
+    <div class="preview-layout reveal">
+      <div class="preview-canvas-wrap">
+        <div class="preview-header">
+          <span class="preview-badge">SEEKER HUB · CAMERA FEED</span>
+          <div class="preview-status" id="previewStatus"><span class="status-dot"></span>IDLE</div>
+        </div>
+        <canvas id="previewCanvas" aria-label="Shepherd simulation: Seeker camera view with dog detection and Action Taker responses"></canvas>
+        <div class="preview-hud">
+          <div class="hud-row">
+            <div class="hud-item"><span class="hud-label">Dog</span><span class="hud-value" id="hudDog">Nala</span></div>
+            <div class="hud-item"><span class="hud-label">State</span><span class="hud-value" id="hudState">Resting</span></div>
+            <div class="hud-item"><span class="hud-label">Gesture</span><span class="hud-value" id="hudGesture">—</span></div>
+          </div>
+          <div class="hud-row">
+            <div class="hud-item"><span class="hud-label">Action Taker</span><span class="hud-value" id="hudAction">Idle</span></div>
+            <div class="hud-item"><span class="hud-label">Puzzle Progress</span><span class="hud-value" id="hudProgress">0%</span></div>
+            <div class="hud-item"><span class="hud-label">Treats</span><span class="hud-value" id="hudTreats">500</span></div>
+          </div>
+        </div>
+        <div class="preview-log" id="previewLog" aria-live="polite"></div>
+      </div>
+
+      <aside class="preview-controls">
+        <div class="control-panel">
+          <h3>Simulation Controls</h3>
+          <button class="btn btn-solid btn-full" id="startSim">Start Simulation</button>
+          <button class="btn btn-ghost btn-full" id="pauseSim" disabled>Pause</button>
+          <button class="btn btn-ghost btn-full" id="resetSim" disabled>Reset</button>
+
+          <div class="control-divider"></div>
+
+          <h4>Trigger Events</h4>
+          <button class="btn btn-ghost btn-full" id="triggerMove" disabled>Dog Starts Moving</button>
+          <button class="btn btn-ghost btn-full" id="triggerBoundary" disabled>Dog Approaches Boundary</button>
+          <button class="btn btn-ghost btn-full" id="triggerIgnore" disabled>Dog Ignores Puzzle</button>
+          <button class="btn btn-ghost btn-full" id="triggerPlay" disabled>Switch to Ball Play</button>
+
+          <div class="control-divider"></div>
+
+          <h4>Speed</h4>
+          <div class="speed-control">
+            <input type="range" id="simSpeed" min="0.5" max="3" step="0.25" value="1">
+            <span id="speedLabel">1×</span>
+          </div>
+
+          <div class="control-divider"></div>
+
+          <h4>Event Timeline</h4>
+          <div class="timeline" id="timeline"></div>
+        </div>
+
+        <div class="legend-panel">
+          <h4>Visual Legend</h4>
+          <ul class="legend-list">
+            <li><span class="legend-color" style="background:#6ff2a5"></span>Seeker FOV</li>
+            <li><span class="legend-color" style="background:#fff"></span>Dog (Tag tracked)</li>
+            <li><span class="legend-color" style="background:#ffb86b"></span>Boundary Zone</li>
+            <li><span class="legend-color" style="background:#6ff2a5"></span>Puzzle Active</li>
+            <li><span class="legend-color" style="background:#ff7a6b"></span>Sound Emitter</li>
+            <li><span class="legend-color" style="background:#ffb86b"></span>Treat Dispensed</li>
+            <li><span class="legend-color" style="background:#6ff2a5"></span>Ball Rolling</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </section>
+
   <section class="section coverage" id="coverage">
     <div class="section-head reveal">
       <p class="eyebrow">Coverage planner</p>

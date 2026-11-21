@@ -698,3 +698,693 @@ if (video) {
     });
   });
 }
+
+// Preview simulation
+const previewCanvas = $("#previewCanvas");
+const previewCtx = previewCanvas ? previewCanvas.getContext("2d") : null;
+let previewRaf = null;
+let previewTime = 0;
+let previewSpeed = 1;
+let previewRunning = false;
+let previewPaused = false;
+let simState = "idle"; // idle, moving, boundary, sound, puzzle, solving, reward, autoSolve, ballPlay
+let dogX = 0.3;
+let dogY = 0.5;
+let dogTargetX = 0.3;
+let dogTargetY = 0.5;
+let dogAngle = 0;
+let puzzleProgress = 0;
+let treatCount = 500;
+let ballX = 0;
+let ballY = 0;
+let ballActive = false;
+let ballAngle = 0;
+let soundWaves = [];
+let eventLog = [];
+let timelineItems = [];
+
+const previewElements = {
+  status: $("#previewStatus"),
+  hudDog: $("#hudDog"),
+  hudState: $("#hudState"),
+  hudGesture: $("#hudGesture"),
+  hudAction: $("#hudAction"),
+  hudProgress: $("#hudProgress"),
+  hudTreats: $("#hudTreats"),
+  log: $("#previewLog"),
+  timeline: $("#timeline"),
+  speedLabel: $("#speedLabel"),
+  startBtn: $("#startSim"),
+  pauseBtn: $("#pauseSim"),
+  resetBtn: $("#resetSim"),
+  triggerMove: $("#triggerMove"),
+  triggerBoundary: $("#triggerBoundary"),
+  triggerIgnore: $("#triggerIgnore"),
+  triggerPlay: $("#triggerPlay"),
+  speedInput: $("#simSpeed")
+};
+
+const SIM_EVENTS = [
+  { id: "idle", label: "Idle — Dog resting", state: "idle" },
+  { id: "move", label: "Dog starts moving", state: "moving" },
+  { id: "boundary", label: "Dog approaches boundary", state: "boundary" },
+  { id: "sound", label: "Sound attraction emitted", state: "sound" },
+  { id: "puzzle", label: "Puzzle presented", state: "puzzle" },
+  { id: "solving", label: "Dog solving puzzle", state: "solving" },
+  { id: "reward", label: "Reward dispensed", state: "reward" },
+  { id: "autoSolve", label: "Auto-solve triggered", state: "autoSolve" },
+  { id: "ballPlay", label: "Ball play mode", state: "ballPlay" }
+];
+
+function addLog(event, detail = "") {
+  const time = new Date().toLocaleTimeString("en-GB", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const entry = document.createElement("div");
+  entry.className = "log-entry";
+  entry.innerHTML = `<span class="log-time">[${time}]</span><span class="log-event">${event}</span><span class="log-detail">${detail}</span>`;
+  previewElements.log.appendChild(entry);
+  previewElements.log.scrollTop = previewElements.log.scrollHeight;
+  eventLog.push({ time, event, detail });
+}
+
+function updateTimeline(activeState) {
+  if (!previewElements.timeline.children.length) {
+    SIM_EVENTS.forEach((e, i) => {
+      const item = document.createElement("div");
+      item.className = "timeline-item";
+      item.dataset.state = e.id;
+      item.innerHTML = `<span class="timeline-dot"></span><span class="timeline-text">${e.label}</span>`;
+      previewElements.timeline.appendChild(item);
+    });
+  }
+  $$(".timeline-item", previewElements.timeline).forEach((item) => {
+    const isActive = item.dataset.state === activeState;
+    item.classList.toggle("active", isActive);
+    if (isActive) item.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+}
+
+function setSimState(state) {
+  simState = state;
+  const stateLabels = {
+    idle: "Resting",
+    moving: "Moving",
+    boundary: "At Boundary",
+    sound: "Sound Emitted",
+    puzzle: "Puzzle Active",
+    solving: "Solving",
+    reward: "Reward",
+    autoSolve: "Auto-Solve",
+    ballPlay: "Ball Play"
+  };
+  const actionLabels = {
+    idle: "Idle",
+    moving: "Tracking",
+    boundary: "Alert",
+    sound: "Emitting Sound",
+    puzzle: "Puzzle Mode",
+    solving: "Monitoring",
+    reward: "Dispensing",
+    autoSolve: "Auto-Solving",
+    ballPlay: "Ball Mode"
+  };
+  const gestures = {
+    idle: "Resting",
+    moving: "Walking",
+    boundary: "Boundary Approach",
+    sound: "Orienting to Sound",
+    puzzle: "Investigating",
+    solving: "Manipulating",
+    reward: "Consuming",
+    autoSolve: "Waiting",
+    ballPlay: "Chasing"
+  };
+
+  previewElements.hudState.textContent = stateLabels[state] || state;
+  previewElements.hudAction.textContent = actionLabels[state] || state;
+  previewElements.hudGesture.textContent = gestures[state] || "—";
+  updateTimeline(state);
+}
+
+function logSim(event, detail) {
+  addLog(event, detail);
+}
+
+function resizePreviewCanvas() {
+  if (!previewCanvas) return;
+  const rect = previewCanvas.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  previewCanvas.width = Math.round(rect.width * dpr);
+  previewCanvas.height = Math.round(rect.height * dpr);
+  previewCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function drawPreviewFrame() {
+  if (!previewCanvas || !previewCtx) return;
+  const w = previewCanvas.width / (window.devicePixelRatio || 1);
+  const h = previewCanvas.height / (window.devicePixelRatio || 1);
+  const cx = w / 2;
+  const cy = h / 2;
+
+  previewCtx.clearRect(0, 0, w, h);
+
+  // Draw grid
+  previewCtx.save();
+  previewCtx.strokeStyle = "rgba(111,242,165,0.04)";
+  previewCtx.lineWidth = 1;
+  const step = 40;
+  for (let x = 0; x < w; x += step) {
+    previewCtx.beginPath();
+    previewCtx.moveTo(x, 0);
+    previewCtx.lineTo(x, h);
+    previewCtx.stroke();
+  }
+  for (let y = 0; y < h; y += step) {
+    previewCtx.beginPath();
+    previewCtx.moveTo(0, y);
+    previewCtx.lineTo(w, y);
+    previewCtx.stroke();
+  }
+  previewCtx.restore();
+
+  // Draw Seeker FOV (cone from top center)
+  previewCtx.save();
+  previewCtx.translate(cx, 0);
+  const fovAngle = Math.PI / 3;
+  const fovRadius = h * 1.1;
+  const gradient = previewCtx.createRadialGradient(0, 0, 0, 0, 0, fovRadius);
+  gradient.addColorStop(0, "rgba(111,242,165,0.08)");
+  gradient.addColorStop(1, "rgba(111,242,165,0)");
+  previewCtx.fillStyle = gradient;
+  previewCtx.beginPath();
+  previewCtx.moveTo(0, 0);
+  previewCtx.arc(0, 0, fovRadius, -fovAngle/2, fovAngle/2);
+  previewCtx.closePath();
+  previewCtx.fill();
+  previewCtx.strokeStyle = "rgba(111,242,165,0.15)";
+  previewCtx.lineWidth = 1;
+  previewCtx.beginPath();
+  previewCtx.moveTo(0, 0);
+  previewCtx.lineTo(Math.sin(-fovAngle/2) * fovRadius, Math.cos(-fovAngle/2) * fovRadius);
+  previewCtx.moveTo(0, 0);
+  previewCtx.lineTo(Math.sin(fovAngle/2) * fovRadius, Math.cos(fovAngle/2) * fovRadius);
+  previewCtx.stroke();
+  previewCtx.restore();
+
+  // Draw boundary zone (bottom area)
+  const boundaryY = h * 0.75;
+  previewCtx.save();
+  const boundaryGradient = previewCtx.createLinearGradient(0, boundaryY, 0, h);
+  boundaryGradient.addColorStop(0, "rgba(255,184,107,0)");
+  boundaryGradient.addColorStop(0.3, "rgba(255,184,107,0.08)");
+  boundaryGradient.addColorStop(1, "rgba(255,184,107,0.15)");
+  previewCtx.fillStyle = boundaryGradient;
+  previewCtx.fillRect(0, boundaryY, w, h - boundaryY);
+  previewCtx.strokeStyle = "rgba(255,184,107,0.3)";
+  previewCtx.lineWidth = 2;
+  previewCtx.setLineDash([10, 10]);
+  previewCtx.beginPath();
+  previewCtx.moveTo(0, boundaryY);
+  previewCtx.lineTo(w, boundaryY);
+  previewCtx.stroke();
+  previewCtx.setLineDash([]);
+  previewCtx.fillStyle = "rgba(255,184,107,0.6)";
+  previewCtx.font = '600 10px "Space Grotesk"';
+  previewCtx.textAlign = "center";
+  previewCtx.fillText("VIRTUAL BOUNDARY", cx, boundaryY - 8);
+  previewCtx.restore();
+
+  // Draw Action Taker position (bottom center)
+  const atX = cx;
+  const atY = h * 0.9;
+  previewCtx.save();
+  previewCtx.translate(atX, atY);
+  // Base
+  previewCtx.fillStyle = "rgba(16,24,21,0.8)";
+  previewCtx.beginPath();
+  previewCtx.roundRect(-50, -30, 100, 50, 8);
+  previewCtx.fill();
+  previewCtx.strokeStyle = "rgba(111,242,165,0.3)";
+  previewCtx.lineWidth = 1;
+  previewCtx.stroke();
+
+  // LED ring
+  const ringActive = ["puzzle", "solving", "reward", "autoSolve", "ballPlay"].includes(simState);
+  if (ringActive) {
+    const pulse = 1 + Math.sin(previewTime * 3) * 0.15;
+    previewCtx.beginPath();
+    previewCtx.arc(0, -10, 18 * pulse, 0, Math.PI * 2);
+    previewCtx.strokeStyle = simState === "ballPlay" ? "rgba(255,184,107,0.8)" : "rgba(111,242,165,0.8)";
+    previewCtx.lineWidth = 3;
+    previewCtx.stroke();
+  }
+
+  // Puzzle indicator
+  if (["puzzle", "solving"].includes(simState)) {
+    previewCtx.fillStyle = "rgba(111,242,165,0.9)";
+    previewCtx.font = '600 9px "Space Grotesk"';
+    previewCtx.textAlign = "center";
+    previewCtx.fillText("PUZZLE", 0, -10);
+    // Progress bar
+    previewCtx.fillStyle = "rgba(255,255,255,0.1)";
+    previewCtx.fillRect(-40, 0, 80, 6);
+    previewCtx.fillStyle = "rgba(111,242,165,0.9)";
+    previewCtx.fillRect(-40, 0, 80 * (puzzleProgress / 100), 6);
+  }
+
+  // Ball play indicator
+  if (simState === "ballPlay") {
+    previewCtx.fillStyle = "rgba(255,184,107,0.9)";
+    previewCtx.font = '600 9px "Space Grotesk"';
+    previewCtx.textAlign = "center";
+    previewCtx.fillText("BALL PLAY", 0, -10);
+  }
+
+  previewCtx.restore();
+
+  // Draw sound waves
+  if (simState === "sound" || soundWaves.length > 0) {
+    soundWaves = soundWaves.filter(w => w.radius < w.maxRadius);
+    soundWaves.forEach(w => {
+      previewCtx.save();
+      previewCtx.globalAlpha = 1 - w.radius / w.maxRadius;
+      previewCtx.strokeStyle = "rgba(255,184,107,0.6)";
+      previewCtx.lineWidth = 2;
+      previewCtx.beginPath();
+      previewCtx.arc(w.x, w.y, w.radius, 0, Math.PI * 2);
+      previewCtx.stroke();
+      previewCtx.restore();
+      w.radius += w.speed * previewSpeed;
+    });
+  }
+
+  // Draw dog
+  const dogScreenX = dogX * w;
+  const dogScreenY = dogY * h;
+
+  // Dog trail
+  if (!window.dogTrail) window.dogTrail = [];
+  window.dogTrail.push({ x: dogScreenX, y: dogScreenY });
+  if (window.dogTrail.length > 30) window.dogTrail.shift();
+
+  previewCtx.save();
+  previewCtx.strokeStyle = "rgba(255,255,255,0.15)";
+  previewCtx.lineWidth = 2;
+  previewCtx.lineCap = "round";
+  previewCtx.beginPath();
+  window.dogTrail.forEach((p, i) => {
+    if (i === 0) previewCtx.moveTo(p.x, p.y);
+    else previewCtx.lineTo(p.x, p.y);
+  });
+  previewCtx.stroke();
+  previewCtx.restore();
+
+  // Dog body
+  previewCtx.save();
+  previewCtx.translate(dogScreenX, dogScreenY);
+  previewCtx.rotate(dogAngle);
+
+  // Body
+  previewCtx.fillStyle = "#fff";
+  previewCtx.beginPath();
+  previewCtx.ellipse(0, 0, 18, 12, 0, 0, Math.PI * 2);
+  previewCtx.fill();
+  previewCtx.shadowColor = "rgba(255,255,255,0.5)";
+  previewCtx.shadowBlur = 8;
+  previewCtx.fill();
+  previewCtx.shadowBlur = 0;
+
+  // Head
+  previewCtx.beginPath();
+  previewCtx.ellipse(18, -4, 10, 8, 0, 0, Math.PI * 2);
+  previewCtx.fill();
+
+  // Ears
+  previewCtx.fillStyle = "#f0f0f0";
+  previewCtx.beginPath();
+  previewCtx.ellipse(22, -10, 5, 7, -0.3, 0, Math.PI * 2);
+  previewCtx.fill();
+  previewCtx.beginPath();
+  previewCtx.ellipse(24, -4, 5, 7, 0.3, 0, Math.PI * 2);
+  previewCtx.fill();
+
+  // Eyes
+  previewCtx.fillStyle = "#1a1a1a";
+  previewCtx.beginPath();
+  previewCtx.arc(22, -5, 2, 0, Math.PI * 2);
+  previewCtx.fill();
+  previewCtx.beginPath();
+  previewCtx.arc(25, -4, 2, 0, Math.PI * 2);
+  previewCtx.fill();
+
+  // Tag on collar
+  previewCtx.fillStyle = "#ffb86b";
+  previewCtx.beginPath();
+  previewCtx.arc(-8, 6, 4, 0, Math.PI * 2);
+  previewCtx.fill();
+  previewCtx.shadowColor = "#ffb86b";
+  previewCtx.shadowBlur = 6;
+  previewCtx.fill();
+  previewCtx.shadowBlur = 0;
+
+  // Direction indicator
+  previewCtx.strokeStyle = "rgba(111,242,165,0.6)";
+  previewCtx.lineWidth = 2;
+  previewCtx.beginPath();
+  previewCtx.moveTo(28, 0);
+  previewCtx.lineTo(40, 0);
+  previewCtx.stroke();
+
+  previewCtx.restore();
+
+  // Dog label
+  previewCtx.save();
+  previewCtx.fillStyle = "rgba(233,240,234,0.9)";
+  previewCtx.font = '600 11px "Space Grotesk"';
+  previewCtx.textAlign = "center";
+  previewCtx.fillText("NALA", dogScreenX, dogScreenY - 30);
+  previewCtx.restore();
+
+  // Draw ball if active
+  if (ballActive) {
+    previewCtx.save();
+    previewCtx.translate(ballX, ballY);
+    previewCtx.fillStyle = "#ffb86b";
+    previewCtx.beginPath();
+    previewCtx.arc(0, 0, 12, 0, Math.PI * 2);
+    previewCtx.fill();
+    previewCtx.strokeStyle = "#e6a05c";
+    previewCtx.lineWidth = 2;
+    previewCtx.stroke();
+    // Ball pattern
+    previewCtx.save();
+    previewCtx.rotate(ballAngle);
+    previewCtx.strokeStyle = "rgba(255,255,255,0.3)";
+    previewCtx.lineWidth = 1.5;
+    previewCtx.beginPath();
+    previewCtx.moveTo(-8, 0);
+    previewCtx.lineTo(8, 0);
+    previewCtx.stroke();
+    previewCtx.restore();
+    previewCtx.restore();
+  }
+
+  // Draw treat particle if rewarding
+  if (simState === "reward") {
+    const treatY = atY - 30 + Math.sin(previewTime * 5) * 20;
+    previewCtx.save();
+    previewCtx.translate(atX, treatY);
+    previewCtx.fillStyle = "#ffb86b";
+    previewCtx.beginPath();
+    previewCtx.arc(0, 0, 6, 0, Math.PI * 2);
+    previewCtx.fill();
+    previewCtx.shadowColor = "#ffb86b";
+    previewCtx.shadowBlur = 10;
+    previewCtx.fill();
+    previewCtx.shadowBlur = 0;
+    previewCtx.restore();
+  }
+
+  // HUD overlays on canvas
+  previewCtx.save();
+  previewCtx.font = '600 10px "Space Grotesk"';
+  previewCtx.fillStyle = "rgba(111,242,165,0.8)";
+  previewCtx.textAlign = "left";
+  previewCtx.fillText("SEEKER HUB · 4K/30 · 60GHz mmWave", 16, 24);
+  previewCtx.fillStyle = "rgba(255,184,107,0.6)";
+  previewCtx.fillText("BOUNDARY ZONE", 16, boundaryY - 16);
+  previewCtx.restore();
+}
+
+function previewLoop() {
+  if (!previewRunning || previewPaused) return;
+
+  const dt = (1/60) * previewSpeed;
+  previewTime += dt;
+
+  // Smooth dog movement toward target
+  const easing = 0.08 * previewSpeed;
+  dogX += (dogTargetX - dogX) * easing;
+  dogY += (dogTargetY - dogY) * easing;
+
+  // Update dog angle toward movement direction
+  const dx = dogTargetX - dogX;
+  const dy = dogTargetY - dogY;
+  if (Math.abs(dx) > 0.001 || Math.abs(dy) > 0.001) {
+    dogAngle = Math.atan2(dy, dx) - Math.PI/2;
+  }
+
+  // State machine
+  switch (simState) {
+    case "moving":
+      if (dogX > 0.85 || dogY > 0.7) {
+        setSimState("boundary");
+        logSim("BOUNDARY", "Dog approached virtual boundary zone");
+        // Auto-trigger sound after 1s
+        setTimeout(() => {
+          if (simState === "boundary") triggerSound();
+        }, 1000 / previewSpeed);
+      }
+      break;
+
+    case "boundary":
+      // Wait for sound trigger
+      break;
+
+    case "sound":
+      // Emit sound waves periodically
+      if (Math.random() < 0.02 * previewSpeed) {
+        soundWaves.push({ x: cx, y: h * 0.9, radius: 0, maxRadius: 300, speed: 2 });
+      }
+      // After 2s, trigger puzzle
+      if (!window.soundStartTime) window.soundStartTime = previewTime;
+      if (previewTime - window.soundStartTime > 2) {
+        triggerPuzzle();
+      }
+      break;
+
+    case "puzzle":
+      // Puzzle presented, wait for solving
+      break;
+
+    case "solving":
+      puzzleProgress += 0.5 * previewSpeed;
+      previewElements.hudProgress.textContent = Math.round(puzzleProgress) + "%";
+      if (puzzleProgress >= 100) {
+        triggerReward();
+      } else if (puzzleProgress > 30 && Math.random() < 0.001 * previewSpeed) {
+        // Random chance of dog getting bored
+        triggerAutoSolve();
+      }
+      break;
+
+    case "reward":
+      treatCount = Math.max(0, treatCount - 1);
+      previewElements.hudTreats.textContent = treatCount;
+      setTimeout(() => {
+        if (simState === "reward") triggerBallPlay();
+      }, 2000 / previewSpeed);
+      break;
+
+    case "autoSolve":
+      puzzleProgress = Math.min(100, puzzleProgress + 2 * previewSpeed);
+      previewElements.hudProgress.textContent = Math.round(puzzleProgress) + "%";
+      if (puzzleProgress >= 100) {
+        triggerReward();
+      }
+      break;
+
+    case "ballPlay":
+      if (!ballActive) {
+        ballX = dogScreenX || atX;
+        ballY = dogScreenY || atY;
+        ballActive = true;
+        ballAngle = 0;
+      }
+      ballAngle += 0.1 * previewSpeed;
+      ballX += Math.cos(ballAngle) * 2 * previewSpeed;
+      ballY += Math.sin(ballAngle) * 1.5 * previewSpeed;
+      // Bounce off walls
+      const w = previewCanvas.width / (window.devicePixelRatio || 1);
+      const h = previewCanvas.height / (window.devicePixelRatio || 1);
+      if (ballX < 20 || ballX > w - 20) ballAngle = Math.PI - ballAngle;
+      if (ballY < 20 || ballY > h - 20) ballAngle = -ballAngle;
+      // Dog chases ball
+      dogTargetX = ballX / w;
+      dogTargetY = ballY / h;
+      break;
+  }
+
+  drawPreviewFrame();
+  previewRaf = requestAnimationFrame(previewLoop);
+}
+
+function triggerMove() {
+  if (simState !== "idle" && simState !== "moving") return;
+  setSimState("moving");
+  dogTargetX = 0.5 + Math.random() * 0.3;
+  dogTargetY = 0.6 + Math.random() * 0.2;
+  logSim("MOVEMENT", "Seeker detected sustained movement — Tag UWB + vision confirm");
+  previewElements.triggerMove.disabled = true;
+  previewElements.triggerBoundary.disabled = false;
+}
+
+function triggerBoundary() {
+  if (simState !== "moving") return;
+  setSimState("boundary");
+  dogTargetX = 0.9;
+  dogTargetY = 0.85;
+  logSim("BOUNDARY", "Mesh handoff — Seeker Field detects boundary approach");
+  previewElements.triggerBoundary.disabled = true;
+  // Auto sound after delay
+  setTimeout(() => triggerSound(), 1500 / previewSpeed);
+}
+
+function triggerSound() {
+  if (simState !== "boundary") return;
+  setSimState("sound");
+  window.soundStartTime = previewTime;
+  soundWaves = [];
+  logSim("SOUND", "Action Taker emitted curiosity chirp — dog orienting reflex triggered");
+  previewElements.triggerIgnore.disabled = false;
+}
+
+function triggerPuzzle() {
+  if (simState !== "sound") return;
+  setSimState("puzzle");
+  puzzleProgress = 0;
+  previewElements.hudProgress.textContent = "0%";
+  logSim("PUZZLE", "Action Taker presented sliding panel puzzle — scent puff released");
+  // Auto-start solving after 1s
+  setTimeout(() => {
+    if (simState === "puzzle") triggerSolving();
+  }, 1000 / previewSpeed);
+}
+
+function triggerSolving() {
+  if (simState !== "puzzle") return;
+  setSimState("solving");
+  logSim("SOLVING", "Dog manipulating panels — progress tracking via force sensors");
+}
+
+function triggerReward() {
+  if (simState !== "solving" && simState !== "autoSolve") return;
+  setSimState("reward");
+  const wasAuto = simState === "autoSolve";
+  logSim("REWARD", `Treat dispensed (${wasAuto ? "auto-solve" : "dog solved"}) — 1 treat, ${treatCount - 1} remaining`);
+}
+
+function triggerAutoSolve() {
+  if (simState !== "solving") return;
+  setSimState("autoSolve");
+  logSim("AUTO-SOLVE", "No progress 60s — wheel auto-rotated to solution, treat dispensed");
+}
+
+function triggerBallPlay() {
+  if (simState !== "reward") return;
+  setSimState("ballPlay");
+  logSim("BALL PLAY", "Internal roller launched ball — unpredictable zig-zag pattern");
+  previewElements.triggerPlay.disabled = true;
+}
+
+function startSimulation() {
+  if (previewRunning) return;
+  previewRunning = true;
+  previewPaused = false;
+  previewTime = 0;
+  simState = "idle";
+  dogX = 0.3;
+  dogY = 0.5;
+  dogTargetX = 0.3;
+  dogTargetY = 0.5;
+  puzzleProgress = 0;
+  treatCount = 500;
+  ballActive = false;
+  soundWaves = [];
+  window.dogTrail = [];
+  window.soundStartTime = null;
+
+  previewElements.log.innerHTML = "";
+  previewElements.hudProgress.textContent = "0%";
+  previewElements.hudTreats.textContent = treatCount;
+  setSimState("idle");
+
+  previewElements.startBtn.disabled = true;
+  previewElements.pauseBtn.disabled = false;
+  previewElements.resetBtn.disabled = false;
+  previewElements.triggerMove.disabled = false;
+  previewElements.triggerBoundary.disabled = true;
+  previewElements.triggerIgnore.disabled = true;
+  previewElements.triggerPlay.disabled = true;
+
+  addLog("SYSTEM", "Simulation started — Seeker Hub camera feed active");
+  addLog("STATUS", "Dog resting — Tag pulse 62 bpm, vision confirms rest");
+
+  resizePreviewCanvas();
+  previewRaf = requestAnimationFrame(previewLoop);
+}
+
+function pauseSimulation() {
+  previewPaused = !previewPaused;
+  previewElements.pauseBtn.textContent = previewPaused ? "Resume" : "Pause";
+  if (!previewPaused) previewRaf = requestAnimationFrame(previewLoop);
+}
+
+function resetSimulation() {
+  previewRunning = false;
+  previewPaused = false;
+  if (previewRaf) cancelAnimationFrame(previewRaf);
+  previewRaf = null;
+
+  previewElements.startBtn.disabled = false;
+  previewElements.pauseBtn.disabled = true;
+  previewElements.resetBtn.disabled = true;
+  previewElements.triggerMove.disabled = true;
+  previewElements.triggerBoundary.disabled = true;
+  previewElements.triggerIgnore.disabled = true;
+  previewElements.triggerPlay.disabled = true;
+  previewElements.pauseBtn.textContent = "Pause";
+
+  previewElements.log.innerHTML = "";
+  previewElements.hudProgress.textContent = "0%";
+  previewElements.hudTreats.textContent = "500";
+  setSimState("idle");
+  previewElements.status.classList.remove("active");
+
+  if (previewCtx) {
+    const w = previewCanvas.width / (window.devicePixelRatio || 1);
+    const h = previewCanvas.height / (window.devicePixelRatio || 1);
+    previewCtx.clearRect(0, 0, w, h);
+  }
+  addLog("SYSTEM", "Simulation reset — ready to start");
+}
+
+// Event listeners
+if (previewElements.startBtn) {
+  previewElements.startBtn.addEventListener("click", startSimulation);
+  previewElements.pauseBtn.addEventListener("click", pauseSimulation);
+  previewElements.resetBtn.addEventListener("click", resetSimulation);
+  previewElements.triggerMove.addEventListener("click", triggerMove);
+  previewElements.triggerBoundary.addEventListener("click", triggerBoundary);
+  previewElements.triggerIgnore.addEventListener("click", () => {
+    if (simState === "sound") {
+      triggerPuzzle();
+      previewElements.triggerIgnore.disabled = true;
+    }
+  });
+  previewElements.triggerPlay.addEventListener("click", triggerBallPlay);
+  previewElements.speedInput.addEventListener("input", (e) => {
+    previewSpeed = Number(e.target.value);
+    previewElements.speedLabel.textContent = previewSpeed + "×";
+  });
+}
+
+if (previewCanvas) {
+  window.addEventListener("resize", () => {
+    clearTimeout(window.previewResizeTimer);
+    window.previewResizeTimer = setTimeout(resizePreviewCanvas, 150);
+  });
+  resizePreviewCanvas();
+}
+
+// Initial log
+addLog("SYSTEM", "Shepherd preview ready — click Start Simulation");
